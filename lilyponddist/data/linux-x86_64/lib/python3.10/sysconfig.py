@@ -438,7 +438,7 @@ def _generate_posix_vars():
 
     # There's a chicken-and-egg situation on OS X with regards to the
     # _sysconfigdata module after the changes introduced by #15298:
-    # get_config_vars() is called by get_platform() as part of the
+    # get_config_vars() is called by _get_platform() as part of the
     # `make pybuilddir.txt` target -- which is a precursor to the
     # _sysconfigdata.py module being constructed.  Unfortunately,
     # get_config_vars() eventually calls _init_posix(), which attempts
@@ -446,7 +446,7 @@ def _generate_posix_vars():
     # for _init_posix() to work, if we're on Darwin, just mock up the
     # _sysconfigdata module manually and populate it with the build vars.
     # This is more than sufficient for ensuring the subsequent call to
-    # get_platform() succeeds.
+    # _get_platform() succeeds.
     name = _get_sysconfigdata_name()
     if 'darwin' in sys.platform:
         import types

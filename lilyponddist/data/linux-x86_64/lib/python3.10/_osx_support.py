@@ -135,7 +135,7 @@ def _get_system_version_tuple():
 
 def _remove_original_values(_config_vars):
     """Remove original unmodified values for testing"""
-    # This is needed for higher-level cross-platform tests of get_platform.
+    # This is needed for higher-level cross-platform tests of _get_platform.
     for k in list(_config_vars):
         if k.startswith(_INITPRE):
             del _config_vars[k]
@@ -497,8 +497,8 @@ def customize_compiler(_config_vars):
 
 
 def get_platform_osx(_config_vars, osname, release, machine):
-    """Filter values for get_platform()"""
-    # called from get_platform() in sysconfig and distutils.util
+    """Filter values for _get_platform()"""
+    # called from _get_platform() in sysconfig and distutils.util
     #
     # For our purposes, we'll assume that the system version from
     # distutils' perspective is what MACOSX_DEPLOYMENT_TARGET is set

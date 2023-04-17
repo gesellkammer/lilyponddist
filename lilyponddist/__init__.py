@@ -1,10 +1,7 @@
-import subprocess
 from pathlib import Path
 import sys
-from typing import Optional
 import platform
 import sysconfig
-import appdirs
 
 
 __VERSION__ = "0.1.0"
@@ -38,11 +35,11 @@ def _initlib():
             f.touch(exist_ok=True)
 
 
-def get_platform() -> tuple[str, str]:
+def _get_platform() -> tuple[str, str]:
     """
     Return a string with current platform (system and machine architecture).
 
-    This attempts to improve upon `sysconfig.get_platform` by fixing some
+    This attempts to improve upon `sysconfig._get_platform` by fixing some
     issues when running a Python interpreter with a different architecture than
     that of the system (e.g. 32bit on 64bit system, or a multiarch build),
     which should return the machine architecture of the currently running
@@ -103,7 +100,7 @@ def lilypondroot() -> Path:
     Will raise IOError if the distributed binaries were not found
     """
     datadir = _datadir()
-    osname, arch = get_platform()
+    osname, arch = _get_platform()
     
     if osname == 'windows':
         if arch != 'x86_64':
@@ -116,7 +113,7 @@ def lilypondroot() -> Path:
                                f"there is no support for {arch}")
         lilyroot = datadir / 'linux-x86_64'
     elif sys.platform == 'darwin':
-        _, arch = get_platform()
+        _, arch = _get_platform()
         if arch == 'x86_64':
             lilyroot = datadir / 'macos-x86_64'
         elif arch == 'arm64':
