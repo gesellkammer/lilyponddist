@@ -3,6 +3,7 @@ on: [push]
 jobs:
   test:
     name: Test lilyponddist in ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ "windows-latest", "ubuntu-latest" ]
