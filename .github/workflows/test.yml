@@ -21,7 +21,7 @@ jobs:
           ls
           pip install .
           cd test
-          python test1.py
+          python test1.py --output ${{ matrix.os }}-${{ matrix.python-version }}
           pip uninstall -y lilyponddist
 
 
