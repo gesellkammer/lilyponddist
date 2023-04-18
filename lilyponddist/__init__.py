@@ -2,29 +2,123 @@ from pathlib import Path
 import sys
 import platform
 import sysconfig
+import os
+import logging
+import urllib.request
+import tempfile
+import appdirs
+import shutil
+import progressbar
+from typing import Union
+
+__VERSION__ = "0.2.0"
 
 
-__VERSION__ = "0.1.3"
+logger = logging.getLogger("lilyponddist")
+
+
+class _ProgressBar():
+
+    def __init__(self):
+        self.pbar = None
+
+    def __call__(self, block_num, block_size, total_size):
+        if not self.pbar:
+            self.pbar=progressbar.ProgressBar(maxval=total_size)
+            self.pbar.start()
+
+        downloaded = block_num * block_size
+        if downloaded < total_size:
+            self.pbar.update(downloaded)
+        else:
+            self.pbar.finish()
+
+
+def _download(url: str, destFolder: Path, showprogress=True) -> Path:
+    assert destFolder.exists() and destFolder.is_dir()
+    fileName = os.path.split(url)[1]
+    dest = Path(destFolder) / fileName
+    if dest.exists():
+        logger.warning(f"Destination {dest} already exists, overwriting")
+        os.remove(dest)
+    logger.info(f"Downloading {url}")
+    if showprogress:
+        urllib.request.urlretrieve(url, dest, _ProgressBar())
+    else:
+        urllib.request.urlretrieve(url, dest)
+    logger.info(f"   ... saved to {dest}")
+    return dest
+
+
+def _uncompress(path: Path, destfolder: Path):
+    def _zipextract(zippedfile: Path, destfolder: Path):
+        import zipfile
+        with zipfile.ZipFile(zippedfile, 'r') as z:
+            z.extractall(destfolder)
+
+    def _targzextract(f: Path, destfolder: Path):
+        import tarfile
+        tfile = tarfile.open(f)
+        tfile.extractall(destfolder)
+
+    destfolder.mkdir(exist_ok=True)
+
+    if path.name.endswith('.zip'):
+        _zipextract(path, destfolder)
+    elif path.name.endswith('.tar.gz'):
+        _targzextract(path, destfolder)
+    else:
+        raise RuntimeError(f"File format of {path} not supported")
+
+
+def _lilyponddist_folder() -> Path:
+    return Path(appdirs.user_data_dir('lilyponddist'))
+
+
+def download_lilypond(osname: str, arch='x86_64', showprogress=True) -> Path:
+    """
+    Downloads lilypond, expands it and returns the root path
+
+    Args:
+        osname: one of 'linux', 'windows', 'darwin'
+        arch: one of 'x86_64', 'arm64'. At the moment only x86_64 is supported
+
+    Returns:
+        the destination folder. This will be something like '~/.local/share/lilyponddist/lilypond-2.24.1'
+    """
+    urls = {
+        ('windows', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-mingw-x86_64.zip",
+        ('linux', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-linux-x86_64.tar.gz",
+    }
+    url = urls.get((osname, arch))
+    if url is None:
+        platforms = [f"{osname}-{arch}" for osname, arch in urls.keys()]
+        raise KeyError(f"Platform {osname}-{arch} not supported. Possible platforms: {platforms}")
+
+    tempdir = Path(tempfile.gettempdir())
+    payload = _download(url, tempdir, showprogress=showprogress)
+    if not payload.exists():
+        raise OSError(f"Failed to download file {payload}, file does not exist")
+
+    destfolder = _lilyponddist_folder()
+    if destfolder.exists():
+        shutil.rmtree(destfolder)
+    _uncompress(payload, destfolder)
+    assert destfolder.exists()
+
+    _fix_times()
+    return destfolder
 
 
 def _is_first_run() -> bool:
-    datadir = _datadir()
-    beacon = datadir / 'lastrun.txt'
-    if beacon.exists():
-        beacontxt = open(beacon).read()
-        line = beacontxt.splitlines()[0]
-        assert line.startswith('Version')
-        version = line.split(":")[1].strip()
-        if version == __VERSION__:
-            return False
-        else:
-            print(f"Found version {version}, but own version is {__VERSION__}")
-    open(beacon, 'w').write(f"Version: {__VERSION__}")
-    return True
+    return not _lilyponddist_folder().exists()
 
 
-def _initlib():
+def _fix_times():
     lilyroot = lilypondroot()
+    if not lilyroot.exists():
+        raise RuntimeError(f"folder {lilyroot} does not exist")
+
     ccache = lilyroot / "lib/guile/2.2/ccache"
     if ccache.exists():
         for f in ccache.rglob("*.go"):
@@ -33,6 +127,19 @@ def _initlib():
     if ccache.exists():
         for f in ccache.rglob("*.go"):
             f.touch(exist_ok=True)
+
+
+def _initlib():
+    osname, arch = _get_platform()
+    if osname == 'darwin':
+        logger.error("For macos it is recommended to install via homebrew at the moment")
+        return
+
+    if arch not in ('x64', 'x86_64'):
+        logger.error(f"At the moment only x64 architecture is supported, got {arch}")
+        return
+
+    download_lilypond(osname=osname)
 
 
 def _get_platform() -> tuple[str, str]:
@@ -88,46 +195,9 @@ def _get_platform() -> tuple[str, str]:
     return system, machine
 
 
-def _datadir() -> Path:
-    return Path(__file__).parent / "data"
-
-
 def lilypondroot() -> Path:
-    """
-    Get the path of the lilypond distributed binaries for this platform
+    return _lilyponddist_folder() / "lilypond-2.24.1"
 
-    Will raise RuntimeError if the platform is not supported
-    Will raise IOError if the distributed binaries were not found
-    """
-    datadir = _datadir()
-    osname, arch = _get_platform()
-    
-    if osname == 'windows':
-        if arch != 'x64':
-            raise RuntimeError(f"lilypond.org only provides binaries for x64, "
-                               f"there is no support for {arch}")
-        lilyroot = datadir / 'windows-x86_64'
-    elif sys.platform == 'linux':
-        if arch != 'x86_64':
-            raise RuntimeError(f"lilypond.org only provides binaries for x86_64, "
-                               f"there is no support for {arch}")
-        lilyroot = datadir / 'linux-x86_64'
-    elif sys.platform == 'darwin':
-        _, arch = _get_platform()
-        if arch == 'x86_64':
-            lilyroot = datadir / 'macos-x86_64'
-        elif arch == 'arm64':
-            raise RuntimeError("lilypond.org does not provide binaries for arm64. "
-                               "Use homebrew to install lilypond")
-        else:
-            raise RuntimeError(f"Architecture {arch} not supported")
-    else:
-        raise RuntimeError(f"Platform {sys.platform} not supported")
-
-    if not lilyroot.exists():
-        raise IOError(f"lilypond distributed files not found. Path: {lilyroot}")
-    return lilyroot
-    
 
 def lilypondbin() -> Path:
     """
@@ -147,5 +217,5 @@ if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--version':
         print(__VERSION__)
 elif _is_first_run():
-    print("lilyponddist -- first run")
+    print("lilyponddist -- First Run. Will download lilypond")
     _initlib()
