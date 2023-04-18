@@ -69,7 +69,7 @@ def _uncompress(path: Path, destfolder: Path):
         tfile = tarfile.open(f)
         tfile.extractall(destfolder)
 
-    destfolder.mkdir(exist_ok=True)
+    destfolder.mkdir(exist_ok=True, parents=True)
 
     if path.name.endswith('.zip'):
         _zipextract(path, destfolder)
