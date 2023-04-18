@@ -1,6 +1,7 @@
 from setuptools import setup
 import os
-
+import subprocess
+import sys
 
 classifiers = """
 Topic :: Multimedia :: Sound/Audio
@@ -15,11 +16,15 @@ def package_files(directory):
     return paths
 
 
+def get_version():
+    return subprocess.check_output([sys.executable, "lilyponddist/__init__.py", "--version"]).decode('utf8').strip()
+
+
 datafiles = package_files('lilyponddist/data')
 print("datafiles", datafiles)
 
 setup(name='lilyponddist',
-      version='0.1.0',
+      version=get_version(),
       url='https://github.com/gesellkammer/lilyponddist',
       description='Distribute lilypond as a pypi package', 
       long_description=open('README.rst').read(),
