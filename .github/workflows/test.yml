@@ -22,9 +22,9 @@ jobs:
           pip install .
           cd test
           python test1.py
-          pip uninstall lilyponddist
-          
-          
+          pip uninstall -y lilyponddist
+
+
       - name: test install from pip
         run: |
           pip install -U lilyponddist
@@ -34,4 +34,3 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           path: test/*.pdf
-
