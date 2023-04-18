@@ -4,7 +4,7 @@ import platform
 import sysconfig
 
 
-__VERSION__ = "0.1.0"
+__VERSION__ = "0.1.1"
 
 
 def _is_first_run() -> bool:
@@ -143,6 +143,9 @@ def lilypondbin() -> Path:
     return lilypondroot() / 'bin' / binary
 
 
-if _is_first_run():
+if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == '--version':
+        print(__VERSION__)
+elif _is_first_run():
     print("lilyponddist -- first run")
     _initlib()
