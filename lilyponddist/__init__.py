@@ -1,7 +1,7 @@
 import sys
 
 
-__VERSION__ = "0.2.0"
+__VERSION__ = "0.3.0"
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--version':
