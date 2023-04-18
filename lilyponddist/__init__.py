@@ -1,5 +1,15 @@
-from pathlib import Path
 import sys
+
+
+__VERSION__ = "0.2.0"
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == '--version':
+        print(__VERSION__)
+    sys.exit(0)
+
+
+from pathlib import Path
 import platform
 import sysconfig
 import os
@@ -10,9 +20,6 @@ import appdirs
 import shutil
 import progressbar
 from typing import Union
-
-
-__VERSION__ = "0.2.0"
 
 
 logger = logging.getLogger("lilyponddist")
@@ -214,10 +221,6 @@ def lilypondbin() -> Path:
     return lilypondroot() / 'bin' / binary
 
 
-if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == '--version':
-        print(__VERSION__)
-
-elif _is_first_run():
+if _is_first_run():
     print("lilyponddist -- First Run. Will download lilypond")
     _initlib()
