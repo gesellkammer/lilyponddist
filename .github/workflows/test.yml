@@ -18,6 +18,7 @@ jobs:
 
       - name: test local install
         run: |
+          ls
           pip install .
           cd test
           python test1.py
