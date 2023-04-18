@@ -13,7 +13,6 @@ def get_version():
     return subprocess.check_output([sys.executable, "lilyponddist/__init__.py", "--version"]).decode('utf8').strip()
 
 
-
 setup(name='lilyponddist',
       version=get_version(),
       url='https://github.com/gesellkammer/lilyponddist',

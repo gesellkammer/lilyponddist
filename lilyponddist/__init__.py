@@ -11,6 +11,7 @@ import shutil
 import progressbar
 from typing import Union
 
+
 __VERSION__ = "0.2.0"
 
 
@@ -216,6 +217,7 @@ def lilypondbin() -> Path:
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--version':
         print(__VERSION__)
+
 elif _is_first_run():
     print("lilyponddist -- First Run. Will download lilypond")
     _initlib()
