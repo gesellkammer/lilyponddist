@@ -103,8 +103,8 @@ def lilypondroot() -> Path:
     osname, arch = _get_platform()
     
     if osname == 'windows':
-        if arch != 'x86_64':
-            raise RuntimeError(f"lilypond.org only provides binaries for x86_64, "
+        if arch != 'x64':
+            raise RuntimeError(f"lilypond.org only provides binaries for x64, "
                                f"there is no support for {arch}")
         lilyroot = datadir / 'windows-x86_64'
     elif sys.platform == 'linux':
