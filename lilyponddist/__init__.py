@@ -4,7 +4,7 @@ import platform
 import sysconfig
 
 
-__VERSION__ = "0.1.1"
+__VERSION__ = "0.1.2"
 
 
 def _is_first_run() -> bool:
