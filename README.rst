@@ -27,3 +27,8 @@ Example
 
     subprocess.call([lilyponddist.lilypondbin(), '/path/to/score.ly', '--pdf', '-o', '/path/to/output'])
 
+
+TODO
+----
+
+* Reimplement this using pooch

@@ -1,7 +1,7 @@
 import sys
 
 
-__VERSION__ = "0.3.0"
+__VERSION__ = "0.4.0"
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--version':
@@ -21,6 +21,13 @@ import shutil
 import progressbar
 from typing import Union
 
+
+urls = {
+    ('windows', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-mingw-x86_64.zip",
+    ('linux', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-linux-x86_64.tar.gz",
+    ('darwin', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-darwin-x86_64.tar.gz"
+}
+    
 
 logger = logging.getLogger("lilyponddist")
 
@@ -83,7 +90,7 @@ def _lilyponddist_folder() -> Path:
     return Path(appdirs.user_data_dir('lilyponddist'))
 
 
-def download_lilypond(osname: str, arch='x86_64', showprogress=True) -> Path:
+def download_lilypond(osname: str = '', arch='', showprogress=True) -> Path:
     """
     Downloads lilypond, expands it and returns the root path
 
@@ -94,10 +101,12 @@ def download_lilypond(osname: str, arch='x86_64', showprogress=True) -> Path:
     Returns:
         the destination folder. This will be something like '~/.local/share/lilyponddist/lilypond-2.24.1'
     """
-    urls = {
-        ('windows', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-mingw-x86_64.zip",
-        ('linux', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-linux-x86_64.tar.gz",
-    }
+    _osname, _arch = _get_platform()
+    if not osname:
+        osname = _osname 
+    if not arch:
+        arch = _arch
+        
     url = urls.get((osname, arch))
     if url is None:
         platforms = [f"{osname}-{arch}" for osname, arch in urls.keys()]
