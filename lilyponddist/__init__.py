@@ -1,7 +1,7 @@
 import sys
 
 
-__VERSION__ = "0.4.0"
+__VERSION__ = "0.4.1"
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--version':
@@ -159,7 +159,7 @@ def _initlib():
     download_lilypond(osname=osname)
 
 
-def _get_platform() -> tuple[str, str]:
+def _get_platform(normalize=True) -> tuple[str, str]:
     """
     Return a string with current platform (system and machine architecture).
 
@@ -170,7 +170,7 @@ def _get_platform() -> tuple[str, str]:
     interpreter rather than that of the system (which didn't seem to work
     properly). The reported machine architectures follow platform-specific
     naming conventions (e.g. "x86_64" on Linux, but "x64" on Windows).
-
+    Use normalize=True to reduce those labels (returns one of 'x86_64', 'arm64', 'x86')
     Example output strings for common platforms:
 
         darwin_(ppc|ppc64|i368|x86_64|arm64)
@@ -209,6 +209,12 @@ def _get_platform() -> tuple[str, str]:
         else:
             machine = "i386"
 
+    if normalize:
+        machine = {
+            'x64': 'x86_64',
+            'aarch64': 'arm64',
+            'amd64': 'x86_64'
+        }.get(machine, machine)
     return system, machine
 
 
