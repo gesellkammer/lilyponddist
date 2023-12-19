@@ -2,7 +2,7 @@ from __future__ import annotations
 import sys
 
 
-__VERSION__ = "0.5"
+__VERSION__ = "0.5.2"
 
 
 if __name__ == '__main__':
@@ -23,6 +23,7 @@ import appdirs
 import shutil
 import progressbar
 import subprocess
+import functools
 
 
 _urls = {
@@ -39,15 +40,20 @@ _urls = {
 }
 
 
-LASTVERSION = (2, 24, 3)
+LASTVERSION = max(_urls.keys())
 urls = _urls[LASTVERSION]
 
 
 logger = logging.getLogger("lilyponddist")
+
+_handler = logging.StreamHandler()
+_formatter = logging.Formatter(fmt='%(name)s:%(lineno)4s:%(levelname)8s >> %(message)s')
+_handler.setFormatter(_formatter)
+logger.addHandler(_handler)
 logger.setLevel("INFO")
 
 
-class LilypondNotFound(RuntimeError): pass
+class LilypondNotFoundError(RuntimeError): pass
 
 
 class _ProgressBar():
@@ -73,10 +79,10 @@ def _download(url: str, destFolder: Path, showprogress=True, skip=True) -> Path:
     dest = Path(destFolder) / fileName
     if dest.exists():
         if skip:
-            logger.warning(f"Destination {dest} already exists, no need to download")
+            logger.info(f"Destination {dest} already exists, no need to download")
             return dest
         else:
-            logger.warning(f"Destination {dest} already exists, overwriting")
+            logger.info(f"Destination {dest} already exists, overwriting")
             os.remove(dest)
     if showprogress:
         print(f"Downloading {url}")
@@ -113,10 +119,10 @@ def _lilyponddist_folder() -> Path:
     return Path(appdirs.user_data_dir('lilyponddist'))
 
 
-def download_lilypond(version: tuple[int, int, int] = LASTVERSION,
-                      osname='',
-                      arch=''
-                      ) -> Path:
+def install_lilypond(version: tuple[int, int, int] = LASTVERSION,
+                     osname='',
+                     arch=''
+                     ) -> Path:
     """
     Downloads and install lilypond, expands it and returns the root path
 
@@ -149,7 +155,6 @@ def download_lilypond(version: tuple[int, int, int] = LASTVERSION,
         raise OSError(f"Failed to download file {payload}, file does not exist")
 
     destfolder = _lilyponddist_folder()
-    # destfolder = lilypondroot()
 
     if destfolder.exists():
         logger.info(f"Destination folder {destfolder} already exists, removing")
@@ -157,8 +162,9 @@ def download_lilypond(version: tuple[int, int, int] = LASTVERSION,
 
     _uncompress(payload, destfolder)
     assert destfolder.exists()
+    _reset_cache()
 
-    _fix_times()
+    _fix_times(version)
     return destfolder
 
 
@@ -166,24 +172,29 @@ def _is_first_run() -> bool:
     return not _lilyponddist_folder().exists()
 
 
-def _fix_times(version=(2, 24, 1)):
+def _fix_times(version: tuple[int, int, int]):
     lilyroot = lilypondroot()
+    if lilyroot is None or not lilyroot.exists():
+        raise RuntimeError(f"Folder '{lilyroot}' does not exist")
+
     major, minor, patch = version
     versionstr = f"{major}.{minor}.{patch}"
-    if not lilyroot.exists():
-        raise RuntimeError(f"folder {lilyroot} does not exist")
 
     ccache = lilyroot / "lib/guile/2.2/ccache"
     if ccache.exists():
         for f in ccache.rglob("*.go"):
             f.touch(exist_ok=True)
         logger.info(f"Fixed times of lilyponds guile cache {ccache}")
+    else:
+        logger.warning(f"Guile cache not found: '{ccache}")
 
     ccache = lilyroot / f"lib/lilypond/{versionstr}/ccache/lily"
     if ccache.exists():
         for f in ccache.rglob("*.go"):
             f.touch(exist_ok=True)
         logger.info(f"Fixed times of lilyponds binaries at {ccache}")
+    else:
+        logger.warning(f"Lilypond .go cached files not found: {ccache}/*.go")
 
 
 def is_lilypond_installed() -> bool:
@@ -194,14 +205,11 @@ def is_lilypond_installed() -> bool:
     The general idea of this package is to generate an isolated
     lilypond installation
     """
-    try:
-        lilybin = lilypondbin()
-        return lilybin.exists()
-    except LilypondNotFound:
-        return False
+    lilybin = _findlily()
+    return lilybin is not None and lilybin.exists()
 
 
-def _initlib():
+def _initlib(autoupdate=False):
     osname, arch = _get_platform()
     if osname == 'darwin':
         logger.error("For macos it is recommended to install via homebrew at the moment")
@@ -211,18 +219,24 @@ def _initlib():
         logger.error(f"At the moment only x64 architecture is supported, got {arch}")
         return
 
-    if not is_lilypond_installed() or needs_update():
-        download_lilypond(osname=osname)
+    if not is_lilypond_installed():
+        logger.info(f"Lilypond not installed, downloading last version {LASTVERSION}")
+        install_lilypond(osname=osname)
+    elif autoupdate and needs_update():
+        logger.info(f"Lilypond is installed but needs to be updated, downloading and installing version {LASTVERSION}")
+        install_lilypond(osname=osname)
     else:
         currentversion, versionline = lilypond_version()
-        logger.info(f"lilypond is installed and up to date (current version: {currentversion}, version line: {versionline})")
+        logger.debug(f"Lilypond is installed (version: {currentversion}, version line: {versionline}). ")
+        if currentversion < LASTVERSION:
+            logger.debug(f"Lilypond can be updated to version {LASTVERSION}")
 
 
 def _get_platform(normalize=True) -> tuple[str, str]:
     """
     Return a string with current platform (system and machine architecture).
 
-    This attempts to improve upon `sysconfig._get_platform` by fixing some
+    This attempts to improve upon `sysconfig.get_platform` by fixing some
     issues when running a Python interpreter with a different architecture than
     that of the system (e.g. 32bit on 64bit system, or a multiarch build),
     which should return the machine architecture of the currently running
@@ -235,6 +249,12 @@ def _get_platform(normalize=True) -> tuple[str, str]:
         darwin_(ppc|ppc64|i368|x86_64|arm64)
         linux_(i686|x86_64|armv7l|aarch64)
         windows_(x86|x64|arm32|arm64)
+
+    Normalizations:
+
+    * aarch64 -> arm64
+    * x64 -> x86_64
+    * amd64 -> x86_64
 
     """
 
@@ -277,6 +297,7 @@ def _get_platform(normalize=True) -> tuple[str, str]:
     return system, machine
 
 
+@functools.cache
 def lilypondroot() -> Path | None:
     """
     The root folder of the lilypond installation
@@ -286,11 +307,13 @@ def lilypondroot() -> Path | None:
         absentry = entry.absolute()
         logger.debug(f"Searching lilypond in '{absentry}'")
         if absentry.is_dir() and (absentry/"bin/lilypond").exists():
+            logger.debug("... found!")
             return absentry
-    logger.info("Did not find lilypond root")
+    logger.info(f"Did not find any lilypond version under '{base}'")
     return None
 
 
+@functools.cache
 def lilypond_version() -> tuple[tuple[int, int, int], str]:
     """
     Returns a tuple (version, versionline)
@@ -299,8 +322,8 @@ def lilypond_version() -> tuple[tuple[int, int, int], str]:
     verisonline is the line where the version is defined (normally the
     first line printed by lilypond when called as 'lilypond --version')
     """
-    lilybin = lilypondbin()
-    if not lilybin.exists():
+    lilybin = _findlily()
+    if not lilybin or not lilybin.exists():
         raise RuntimeError("Lilypond has not been installed via lilyponddist")
 
     proc = subprocess.run([lilybin, '--version'], capture_output=True)
@@ -337,23 +360,18 @@ def update() -> tuple[int, int, int] | None:
         if no update was needed
     """
     if not is_lilypond_installed():
-        download_lilypond(version=LASTVERSION)
+        install_lilypond(version=LASTVERSION)
         return LASTVERSION
 
     if needs_update():
-        download_lilypond(version=LASTVERSION)
+        install_lilypond(version=LASTVERSION)
         return LASTVERSION
 
     logger.debug("No need to update")
     return None
 
 
-def lilypondbin() -> Path:
-    """
-    Get the lilypond binary for this platform.
-
-    Will raise RuntimeError if this platform is not supported
-    """
+def _findlily() -> Path | None:
     if sys.platform == 'win32':
         binary = 'lilypond.exe'
     else:
@@ -361,13 +379,51 @@ def lilypondbin() -> Path:
 
     root = lilypondroot()
     if root is None:
-        raise LilypondNotFound("lilypond root folder not found")
+        logger.error("lilypond root folder not found")
+        return None
 
-    if needs_update():
-        logger.info(f"There is an update available, {LASTVERSION}. To update, call the `update()` function")
     return root / 'bin' / binary
 
 
+def _reset_cache():
+    lilypondroot.cache_clear()
+    lilypond_version.cache_clear()
+
+
+def lilypondbin(autoinstall=True) -> Path:
+    """
+    Get the lilypond binary for this platform.
+
+    Args:
+        autoinstall: will install lilypond if not already installed. If False and lilypond has not
+            been installed, raises LilypondNotFoundError exception
+
+    Returns:
+        the path of the lilypond binary as a Path object
+    """
+    if not is_lilypond_installed():
+        if autoinstall:
+            logger.debug(f"Lilypond is not installed, downloading and installing version {LASTVERSION}")
+            install_lilypond()
+            assert is_lilypond_installed()
+        else:
+            raise LilypondNotFoundError("Lilypond is not installed")
+
+    lily = _findlily()
+    if not lily:
+        raise RuntimeError("Could not find lilypond binary")
+
+    if needs_update():
+        logger.debug(f"There is an update available, {LASTVERSION}. To update, call the `update()` function")
+
+    return lily
+
+
 if _is_first_run():
-    print("lilyponddist -- First Run. Will download lilypond")
+    print()
+    print("*****************************************************")
+    print("*              lilyponddist -- First Run            *")
+    print("*****************************************************")
+    print()
+    logger.setLevel("DEBUG")
     _initlib()
