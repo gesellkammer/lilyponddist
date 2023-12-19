@@ -10,4 +10,4 @@ logger.setLevel('DEBUG')
 
 import lilyponddist
 
-subprocess.call([lilyponddist.lilypondbin(), "test1.ly", '-o', args.output])
+subprocess.call([lilyponddist.lilypondbin(), "-o", args.output, "test1.ly"])
