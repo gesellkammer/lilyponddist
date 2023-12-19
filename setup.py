@@ -9,6 +9,7 @@ Topic :: Multimedia :: Sound/Audio
 Programming Language :: Python :: 3
 """
 
+
 def get_version():
     return subprocess.check_output([sys.executable, "lilyponddist/__init__.py", "--version"]).decode('utf8').strip()
 

@@ -1,7 +1,9 @@
+from __future__ import annotations
 import sys
 
 
-__VERSION__ = "0.4.1"
+__VERSION__ = "0.5"
+
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--version':
@@ -13,23 +15,39 @@ from pathlib import Path
 import platform
 import sysconfig
 import os
+import re
 import logging
 import urllib.request
 import tempfile
 import appdirs
 import shutil
 import progressbar
-from typing import Union
+import subprocess
 
 
-urls = {
-    ('windows', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-mingw-x86_64.zip",
-    ('linux', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-linux-x86_64.tar.gz",
-    ('darwin', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-darwin-x86_64.tar.gz"
+_urls = {
+    (2, 24, 1): {
+        ('windows', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-mingw-x86_64.zip",
+        ('linux', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-linux-x86_64.tar.gz",
+        ('darwin', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.1/downloads/lilypond-2.24.1-darwin-x86_64.tar.gz"
+    },
+    (2, 24, 3): {
+        ('windows', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.3/downloads/lilypond-2.24.3-mingw-x86_64.zip",
+        ('linux', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.3/downloads/lilypond-2.24.3-linux-x86_64.tar.gz",
+        ('darwin', 'x86_64'): "https://gitlab.com/lilypond/lilypond/-/releases/v2.24.3/downloads/lilypond-2.24.3-darwin-x86_64.tar.gz"
+    }
 }
-    
+
+
+LASTVERSION = (2, 24, 3)
+urls = _urls[LASTVERSION]
+
 
 logger = logging.getLogger("lilyponddist")
+logger.setLevel("INFO")
+
+
+class LilypondNotFound(RuntimeError): pass
 
 
 class _ProgressBar():
@@ -49,17 +67,22 @@ class _ProgressBar():
             self.pbar.finish()
 
 
-def _download(url: str, destFolder: Path, showprogress=True) -> Path:
+def _download(url: str, destFolder: Path, showprogress=True, skip=True) -> Path:
     assert destFolder.exists() and destFolder.is_dir()
     fileName = os.path.split(url)[1]
     dest = Path(destFolder) / fileName
     if dest.exists():
-        logger.warning(f"Destination {dest} already exists, overwriting")
-        os.remove(dest)
-    logger.info(f"Downloading {url}")
+        if skip:
+            logger.warning(f"Destination {dest} already exists, no need to download")
+            return dest
+        else:
+            logger.warning(f"Destination {dest} already exists, overwriting")
+            os.remove(dest)
     if showprogress:
+        print(f"Downloading {url}")
         urllib.request.urlretrieve(url, dest, _ProgressBar())
     else:
+        logger.info(f"Downloading {url}")
         urllib.request.urlretrieve(url, dest)
     logger.info(f"   ... saved to {dest}")
     return dest
@@ -90,11 +113,15 @@ def _lilyponddist_folder() -> Path:
     return Path(appdirs.user_data_dir('lilyponddist'))
 
 
-def download_lilypond(osname: str = '', arch='', showprogress=True) -> Path:
+def download_lilypond(version: tuple[int, int, int] = LASTVERSION,
+                      osname='',
+                      arch=''
+                      ) -> Path:
     """
-    Downloads lilypond, expands it and returns the root path
+    Downloads and install lilypond, expands it and returns the root path
 
     Args:
+        version: the version to download/install
         osname: one of 'linux', 'windows', 'darwin'
         arch: one of 'x86_64', 'arm64'. At the moment only x86_64 is supported
 
@@ -103,23 +130,31 @@ def download_lilypond(osname: str = '', arch='', showprogress=True) -> Path:
     """
     _osname, _arch = _get_platform()
     if not osname:
-        osname = _osname 
+        osname = _osname
     if not arch:
         arch = _arch
-        
+
+    urls = _urls.get(version)
+    if not urls:
+        raise ValueError(f"Version {version} unknown. Possible versions: {_urls.keys()}")
+
     url = urls.get((osname, arch))
     if url is None:
         platforms = [f"{osname}-{arch}" for osname, arch in urls.keys()]
         raise KeyError(f"Platform {osname}-{arch} not supported. Possible platforms: {platforms}")
 
     tempdir = Path(tempfile.gettempdir())
-    payload = _download(url, tempdir, showprogress=showprogress)
+    payload = _download(url, tempdir, showprogress=True)
     if not payload.exists():
         raise OSError(f"Failed to download file {payload}, file does not exist")
 
     destfolder = _lilyponddist_folder()
+    # destfolder = lilypondroot()
+
     if destfolder.exists():
+        logger.info(f"Destination folder {destfolder} already exists, removing")
         shutil.rmtree(destfolder)
+
     _uncompress(payload, destfolder)
     assert destfolder.exists()
 
@@ -131,8 +166,10 @@ def _is_first_run() -> bool:
     return not _lilyponddist_folder().exists()
 
 
-def _fix_times():
+def _fix_times(version=(2, 24, 1)):
     lilyroot = lilypondroot()
+    major, minor, patch = version
+    versionstr = f"{major}.{minor}.{patch}"
     if not lilyroot.exists():
         raise RuntimeError(f"folder {lilyroot} does not exist")
 
@@ -140,10 +177,28 @@ def _fix_times():
     if ccache.exists():
         for f in ccache.rglob("*.go"):
             f.touch(exist_ok=True)
-    ccache = lilyroot / "lib/lilypond/2.24.1/ccache/lily"
+        logger.info(f"Fixed times of lilyponds guile cache {ccache}")
+
+    ccache = lilyroot / f"lib/lilypond/{versionstr}/ccache/lily"
     if ccache.exists():
         for f in ccache.rglob("*.go"):
             f.touch(exist_ok=True)
+        logger.info(f"Fixed times of lilyponds binaries at {ccache}")
+
+
+def is_lilypond_installed() -> bool:
+    """
+    Returns True if lilypond is installed via lilyponddist
+
+    We never check if lilypond is installed by any other means.
+    The general idea of this package is to generate an isolated
+    lilypond installation
+    """
+    try:
+        lilybin = lilypondbin()
+        return lilybin.exists()
+    except LilypondNotFound:
+        return False
 
 
 def _initlib():
@@ -156,7 +211,11 @@ def _initlib():
         logger.error(f"At the moment only x64 architecture is supported, got {arch}")
         return
 
-    download_lilypond(osname=osname)
+    if not is_lilypond_installed() or needs_update():
+        download_lilypond(osname=osname)
+    else:
+        currentversion, versionline = lilypond_version()
+        logger.info(f"lilypond is installed and up to date (current version: {currentversion}, version line: {versionline})")
 
 
 def _get_platform(normalize=True) -> tuple[str, str]:
@@ -218,13 +277,80 @@ def _get_platform(normalize=True) -> tuple[str, str]:
     return system, machine
 
 
-def lilypondroot() -> Path:
-    return _lilyponddist_folder() / "lilypond-2.24.1"
+def lilypondroot() -> Path | None:
+    """
+    The root folder of the lilypond installation
+    """
+    base = _lilyponddist_folder()
+    for entry in base.glob("lilypond-*"):
+        absentry = entry.absolute()
+        logger.debug(f"Searching lilypond in '{absentry}'")
+        if absentry.is_dir() and (absentry/"bin/lilypond").exists():
+            return absentry
+    logger.info("Did not find lilypond root")
+    return None
+
+
+def lilypond_version() -> tuple[tuple[int, int, int], str]:
+    """
+    Returns a tuple (version, versionline)
+
+    where version is a tuple (major: int, minor: int, patch: int) and
+    verisonline is the line where the version is defined (normally the
+    first line printed by lilypond when called as 'lilypond --version')
+    """
+    lilybin = lilypondbin()
+    if not lilybin.exists():
+        raise RuntimeError("Lilypond has not been installed via lilyponddist")
+
+    proc = subprocess.run([lilybin, '--version'], capture_output=True)
+    if proc.returncode != 0:
+        logger.error(proc.stderr)
+        raise RuntimeError(f"Error while running '{lilybin} --version', error code: {proc.returncode}")
+    for line in proc.stdout.decode().splitlines():
+        if match := re.search(r"GNU LilyPond (\d+)\.(\d+)\.(\d+)", line):
+            major = int(match.group(1))
+            minor = int(match.group(2))
+            patch = int(match.group(3))
+            return ((major, minor, patch), line)
+    return ((0, 0, 0), '')
+
+
+def needs_update() -> bool:
+    """
+    Is there an update available for the current version of lilypond installed via lilyponddist
+    """
+    if not is_lilypond_installed():
+        raise RuntimeError("No version of lilypond installed via lilyponddist")
+    currentversion, versionline = lilypond_version()
+    if currentversion[0] == 0:
+        raise RuntimeError("Could not fetch the current version of lilypond")
+    return currentversion < LASTVERSION
+
+
+def update() -> tuple[int, int, int] | None:
+    """
+    Update the current installation if needed
+
+    Returns:
+        either the version to which lilypond has been updated, or None
+        if no update was needed
+    """
+    if not is_lilypond_installed():
+        download_lilypond(version=LASTVERSION)
+        return LASTVERSION
+
+    if needs_update():
+        download_lilypond(version=LASTVERSION)
+        return LASTVERSION
+
+    logger.debug("No need to update")
+    return None
 
 
 def lilypondbin() -> Path:
     """
-    Get the lilypond binary for this platform. 
+    Get the lilypond binary for this platform.
 
     Will raise RuntimeError if this platform is not supported
     """
@@ -233,7 +359,13 @@ def lilypondbin() -> Path:
     else:
         binary = 'lilypond'
 
-    return lilypondroot() / 'bin' / binary
+    root = lilypondroot()
+    if root is None:
+        raise LilypondNotFound("lilypond root folder not found")
+
+    if needs_update():
+        logger.info(f"There is an update available, {LASTVERSION}. To update, call the `update()` function")
+    return root / 'bin' / binary
 
 
 if _is_first_run():
