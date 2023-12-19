@@ -157,10 +157,15 @@ def install_lilypond(version: tuple[int, int, int] = LASTVERSION,
     destfolder = _lilyponddist_folder()
 
     if destfolder.exists():
-        logger.info(f"Destination folder {destfolder} already exists, removing")
+        logger.info(f"Destination folder '{destfolder}' already exists, removing old installation")
         shutil.rmtree(destfolder)
 
+    logger.info(f"Creating folder '{destfolder}")
+    destfolder.mkdir(parents=True, exist_ok=True)
+
+    logger.debug(f"Uncompressing '{payload}' to '{destfolder}'")
     _uncompress(payload, destfolder)
+
     assert destfolder.exists()
     _reset_cache()
 
@@ -309,7 +314,7 @@ def lilypondroot() -> Path | None:
         if absentry.is_dir() and (absentry/"bin/lilypond").exists():
             logger.debug("... found!")
             return absentry
-    logger.info(f"Did not find any lilypond version under '{base}'")
+    logger.info(f"Did not find any lilypond version under '{base}'. Folder content: {base.glob('*')}")
     return None
 
 
