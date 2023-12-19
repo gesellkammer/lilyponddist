@@ -1,20 +1,26 @@
 lilyponddist
 ============
 
-This package wraps the binary distribution of lilypond, allowing to install it in order to be used from python.
+This package wraps the binary distribution of lilypond, allowing to install and use lilypond from python
 
-At the moment it is hardcoded to download and install lilypond 2.24.1. The platforms supported are 
-linux x86_64 and windows x86_64. For macos it is recommended to install via homebrew, which supports 
-both x64 and arm64.
+Notice that this package installs lilypond from the releases provided by the lilypond team. It does not
+conflict with any user-installed lilypond version, since it places lilypond at an ad-hoc place, without
+modifying the PATH or any other part of the environment. 
 
-At first run it will download the corresponding distribution.
+At the moment the platforms supported are linux x86_64, windows x86_64 and macos x86_64. For macos 
+arm64 the only way to install a native version is via homebrew. 
+
+At first run ``lilyponddist`` will download the corresponding distribution. Whenever lilypond releases
+a new binary this package will be updated with the new URLs. After the package itself is updated
+the lilypond version can be updated by calling the ``update`` function
+
 
 Installation
 ------------
 
 .. code:: bash
 
-    pip install lilyponddist
+    pip install --update lilyponddist
 
 
 Example
@@ -28,7 +34,15 @@ Example
     subprocess.call([lilyponddist.lilypondbin(), '/path/to/score.ly', '--pdf', '-o', '/path/to/output'])
 
 
-TODO
-----
+	# Update if possible
+	lilyponddist.update()
 
-* Reimplement this using pooch
+	# It can be checked if an update is available
+	lilyponddist.needs_update()  # will return True if there is an update available
+
+	# The current version can be checked via ``lilypond_version``. This returns the version of the
+	# lilypond distribution installed via ``lilyponddist``. There is never an attempt to interact with
+	# a user installed lilypond
+	lilyponddist.lilypond_version()
+
+
