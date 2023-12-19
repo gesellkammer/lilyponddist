@@ -314,7 +314,7 @@ def lilypondroot() -> Path | None:
         if absentry.is_dir() and (absentry/"bin/lilypond").exists():
             logger.debug("... found!")
             return absentry
-    logger.info(f"Did not find any lilypond version under '{base}'. Folder content: {base.glob('*')}")
+    logger.info(f"Did not find any lilypond version under '{base}'. Folder content: {list(base.glob('*'))}")
     return None
 
 
