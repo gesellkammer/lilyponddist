@@ -308,10 +308,11 @@ def lilypondroot() -> Path | None:
     The root folder of the lilypond installation
     """
     base = _lilyponddist_folder()
+    exe = _lilyexe()
     for entry in base.glob("lilypond-*"):
         absentry = entry.absolute()
         logger.debug(f"Searching lilypond in '{absentry}'")
-        if absentry.is_dir() and (absentry/"bin/lilypond").exists():
+        if absentry.is_dir() and (absentry/"bin"/exe).exists():
             logger.debug("... found!")
             return absentry
     logger.info(f"Did not find any lilypond version under '{base}'. Folder content: {list(base.glob('*'))}")
@@ -376,18 +377,21 @@ def update() -> tuple[int, int, int] | None:
     return None
 
 
-def _findlily() -> Path | None:
+def _lilyexe() -> str:
     if sys.platform == 'win32':
-        binary = 'lilypond.exe'
+        return 'lilypond.exe'
     else:
-        binary = 'lilypond'
+        return 'lilypond'
 
+
+def _findlily() -> Path | None:
+    exe = _lilyexe()
     root = lilypondroot()
     if root is None:
         logger.error("lilypond root folder not found")
         return None
 
-    return root / 'bin' / binary
+    return root / 'bin' / exe
 
 
 def _reset_cache():
