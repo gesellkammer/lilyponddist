@@ -134,7 +134,7 @@ def install_lilypond(version: tuple[int, int, int] = LASTVERSION,
     Returns:
         the destination folder. This will be something like '~/.local/share/lilyponddist/lilypond-2.24.1'
     """
-    _osname, _arch = _get_platform()
+    _osname, _arch = get_platform()
     if not osname:
         osname = _osname
     if not arch:
@@ -215,7 +215,7 @@ def is_lilypond_installed() -> bool:
 
 
 def _initlib(autoupdate=False):
-    osname, arch = _get_platform()
+    osname, arch = get_platform()
     if osname == 'darwin':
         logger.error("For macos it is recommended to install via homebrew at the moment")
         return
@@ -237,7 +237,7 @@ def _initlib(autoupdate=False):
             logger.debug(f"Lilypond can be updated to version {LASTVERSION}")
 
 
-def _get_platform(normalize=True) -> tuple[str, str]:
+def get_platform(normalize=True) -> tuple[str, str]:
     """
     Return a string with current platform (system and machine architecture).
 
@@ -427,6 +427,9 @@ def lilypondbin(autoinstall=True) -> Path:
 
     return lily
 
+
+# For backwards compatibility
+_get_platform = get_platform
 
 if _is_first_run():
     print()
