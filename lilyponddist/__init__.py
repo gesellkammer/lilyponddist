@@ -2,7 +2,7 @@ from __future__ import annotations
 import sys
 
 
-__VERSION__ = "0.7.0"
+__VERSION__ = "0.7.1"
 
 
 if __name__ == '__main__':
@@ -217,7 +217,8 @@ def is_lilypond_installed() -> bool:
 def _initlib(autoupdate=False):
     osname, arch = get_platform()
     if osname == 'darwin':
-        logger.error("For macos it is recommended to install via homebrew at the moment")
+        logger.info("For macos it is recommended to install via homebrew as there are no"
+                    " prebuilt binaries of lilypond for macos/arm64 at the moment")
         return
 
     if arch not in ('x64', 'x86_64'):
@@ -390,8 +391,11 @@ def _findlily() -> Path | None:
     if root is None:
         logger.error("lilypond root folder not found")
         return None
-
-    return root / 'bin' / exe
+    lilypath = root / 'bin' / exe
+    if not lilypath.exists():
+        logger.error(f"The lilypond path {lilypath} does not exist")
+        return None
+    return lilypath
 
 
 def _reset_cache():
