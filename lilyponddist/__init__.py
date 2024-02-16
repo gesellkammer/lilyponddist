@@ -2,7 +2,7 @@ from __future__ import annotations
 import sys
 
 
-__VERSION__ = "0.6.0"
+__VERSION__ = "0.7.0"
 
 
 if __name__ == '__main__':
