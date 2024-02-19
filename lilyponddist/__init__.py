@@ -389,10 +389,13 @@ def _findlily() -> Path | None:
     exe = _lilyexe()
     root = lilypondroot()
     if root is None:
-        logger.error("lilypond root folder not found")
+        # Do not mark this as error since this function could be called
+        # to query if lilypond needs to be installed
+        logger.info("lilypond root folder not found")
         return None
     lilypath = root / 'bin' / exe
     if not lilypath.exists():
+        # This is an error, since the root folder is found but the binary is not present
         logger.error(f"The lilypond path {lilypath} does not exist")
         return None
     return lilypath
