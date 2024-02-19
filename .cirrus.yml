@@ -1,0 +1,32 @@
+container:
+  image: python:latest
+
+test_task:
+
+  macos_instance:
+    image: ghcr.io/cirruslabs/macos-ventura-xcode:latest
+
+  test_script: |
+    set -x
+    ls -l
+    python3 -c 'import platform; print(platform.machine(), platform.uname())'  # , platform.dist())'
+    python3 -m pip install .
+    cd test
+    ./citests
+    
+        
+  binaries_artifacts:
+    path: test/*.pdf
+
+
+
+#
+# OSX
+#
+#osx_task:
+#  auto_cancellation: true
+
+#
+#  check_script:
+#    - python3 -c "import platform; print(platform.machine(), platform.architecture())"
+
