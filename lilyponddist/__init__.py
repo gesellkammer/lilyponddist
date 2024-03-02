@@ -146,6 +146,12 @@ def install_lilypond(version: tuple[int, int, int] = LASTVERSION,
 
     url = urls.get((osname, arch))
     if url is None:
+        if osname == 'darwin' and arch == 'arm64':
+            print("At the moment there is no binary package for macos arm64. The recommended "
+                  "way to install lilypond in this case is via homebrew (https://brew.sh/). "
+                  "Once homebrew is installed, you can install lilypond by typing `brew install lilypond` "
+                  "at the terminal. See https://formulae.brew.sh/formula/lilypond#default. This will "
+                  "install a native (arm64) version for your OS.")
         platforms = [f"{osname}-{arch}" for osname, arch in urls.keys()]
         raise KeyError(f"Platform {osname}-{arch} not supported. Possible platforms: {platforms}")
 

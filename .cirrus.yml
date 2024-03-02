@@ -17,16 +17,3 @@ test_task:
         
   binaries_artifacts:
     path: test/*.pdf
-
-
-
-#
-# OSX
-#
-#osx_task:
-#  auto_cancellation: true
-
-#
-#  check_script:
-#    - python3 -c "import platform; print(platform.machine(), platform.architecture())"
-
