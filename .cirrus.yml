@@ -9,10 +9,12 @@ test_task:
   test_script: |
     set -x
     ls -l
-    python3 -c 'import platform; print(platform.machine(), platform.uname())'  # , platform.dist())'
-    python3 -m pip install .
+    python3 -c 'import platform; print(platform.machine(), platform.uname())'
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python -m pip install .
     cd test
-    python3 test1.py --output test1.pdf
+    python test1.py --output test1.pdf
     
         
   binaries_artifacts:
