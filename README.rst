@@ -7,12 +7,18 @@ Notice that this package installs lilypond from the releases provided by the lil
 conflict with any user-installed lilypond version, since it places lilypond at an ad-hoc place, without
 modifying the PATH or any other part of the environment. 
 
-At the moment the platforms supported are linux x86_64, windows x86_64 and macos x86_64. For macos 
-arm64 the only way to install a native version is via homebrew. 
+At the moment these platforms are supported: linux-x86_64, windows-x86_64, darwin-x86_64 and darwin-arm64.
+Support for macos (darwin) arm64 is only with an unstable version (2.25), but tests show that
+this version works correctly with macos >= 13
 
-At first run ``lilyponddist`` will download the corresponding distribution. Whenever lilypond releases
-a new binary this package will be updated with the new URLs. After the package itself is updated
-the lilypond version can be updated by calling the ``update`` function
+The first time it is asked for the path of the lilypond binary, **lilyponddist** will download
+the given version (or the latest version if no version is specified) and the user can call that
+binary as if it was any regular installation of lilypond. Any subsequent call will use the already installed
+version. 
+
+**lilyponddist** follows the release process of lilypond closely and any new binary release is incorporated
+to the registry of downloads. Updating lilyponddist through pip will make these updates available via 
+the ``update`` function.  
 
 
 Installation
@@ -20,7 +26,7 @@ Installation
 
 .. code:: bash
 
-    pip install --update lilyponddist
+    pip install lilyponddist
 
 
 Example
@@ -34,15 +40,37 @@ Example
     subprocess.call([lilyponddist.lilypondbin(), '/path/to/score.ly', '--pdf', '-o', '/path/to/output'])
 
 
-	# Update if possible
-	lilyponddist.update()
+Documentation
+-------------
 
-	# It can be checked if an update is available
-	lilyponddist.needs_update()  # will return True if there is an update available
+### ``lilypondbin(version='')``
+
+
+
+### ``update()``
+
+Update the current lilypond installation if possible
+
+
+### ``can_update()``
+
+Checks if an update is available. This functions
+will return the latest version to update to, or None if
+there are no updates available 
+
+
 
 	# The current version can be checked via ``lilypond_version``. This returns the version of the
 	# lilypond distribution installed via ``lilyponddist``. There is never an attempt to interact with
 	# a user installed lilypond
 	lilyponddist.lilypond_version()
+
+	# All available versions can be queried via
+	lilyponddist.avaialable_versions()
+
+	# Installed versions can be queried via
+	lilyponddist.installed_versions()
+
+	
 
 
