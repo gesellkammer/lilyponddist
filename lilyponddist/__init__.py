@@ -2,7 +2,7 @@ from __future__ import annotations
 import sys
 
 
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.0.1"
 
 
 if __name__ == '__main__':
@@ -503,6 +503,10 @@ def _lilyexe() -> str:
 
 def _find_lilypond(version='') -> Path | None:
     installed = installed_versions()
+    if not installed:
+        logger.debug("No lilypond installation found")
+        return None
+
     if version:
         versiontup = _parse_versionstr(version)
     else:
