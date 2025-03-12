@@ -23,6 +23,7 @@ jobs:
           python test1.py --output ${{ matrix.os }}-${{ matrix.python-version }}-git
           pip uninstall -y lilyponddist
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: artifact-${{ matrix.os }}-${{ matrix.python-version }}-${{ strategy.job-index }}
           path: test/*.pdf
