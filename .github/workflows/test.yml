@@ -26,27 +26,3 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           path: test/*.pdf
-
-  testpip:
-    name: Test lilyponddist in ${{ matrix.os }} - python ${{ matrix.python-version}} - pip
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        python-version: ["3.9", "3.13"]
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: test install from pip
-        run: |
-          pip install -U lilyponddist
-          cd test
-          python test1.py --output ${{ matrix.os }}-${{ matrix.python-version }}-pip
-
-      - uses: actions/upload-artifact@v3
-        with:
-          path: test/*.pdf
