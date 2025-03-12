@@ -1,16 +1,6 @@
 from __future__ import annotations
 import sys
 
-
-__VERSION__ = "1.0.1"
-
-
-if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == '--version':
-        print(__VERSION__)
-    sys.exit(0)
-
-
 from pathlib import Path
 import platform
 import sysconfig
@@ -20,7 +10,6 @@ import logging
 import urllib.request
 import tempfile
 import appdirs
-import shutil
 import progressbar
 import subprocess
 import functools
@@ -42,6 +31,12 @@ _urls = {
         ('linux', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.15/downloads/lilypond-2.25.15-linux-x86_64.tar.gz',
         ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.15/downloads/lilypond-2.25.15-darwin-x86_64.tar.gz',
         ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.15/downloads/lilypond-2.25.15-darwin-arm64.tar.gz'
+    },
+    (2, 25, 24): {
+        ('windows', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-mingw-x86_64.zip',
+        ('linux', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-linux-x86_64.tar.gz',
+        ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-darwin-x86_64.tar.gz',
+        ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-darwin-arm64.tar.gz'
     }
 }
 
@@ -58,13 +53,14 @@ logger.addHandler(_handler)
 logger.setLevel("INFO")
 
 
-class LilypondNotFoundError(RuntimeError): pass
+class LilypondNotFoundError(RuntimeError):
+    pass
 
 
 class _ProgressBar():
 
     def __init__(self):
-        self.pbar = None
+        self.pbar: progressbar.ProgressBar | None = None
 
     def __call__(self, block_num, block_size, total_size):
         if not self.pbar:
@@ -337,7 +333,8 @@ def get_platform(normalize=True) -> tuple[str, str]:
     properly). The reported machine architectures follow platform-specific
     naming conventions (e.g. "x86_64" on Linux, but "x64" on Windows).
     Use normalize=True to reduce those labels (returns one of 'x86_64', 'arm64', 'x86')
-    Example output strings for common platforms:
+
+    Example output strings for common platforms::
 
         darwin_(ppc|ppc64|i368|x86_64|arm64)
         linux_(i686|x86_64|armv7l|aarch64)
