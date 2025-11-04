@@ -1,18 +1,21 @@
 from __future__ import annotations
 import sys
 
-from pathlib import Path
 import platform
 import sysconfig
 import os
 import re
 import logging
-import urllib.request
 import tempfile
 import appdirs
-import progressbar
 import subprocess
 import functools
+
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import progressbar
+    import pathlib
 
 
 _urls = {
@@ -37,6 +40,18 @@ _urls = {
         ('linux', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-linux-x86_64.tar.gz',
         ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-darwin-x86_64.tar.gz',
         ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.24/downloads/lilypond-2.25.24-darwin-arm64.tar.gz'
+    },
+    (2, 25, 26): {
+        ('windows', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.26/downloads/lilypond-2.25.26-mingw-x86_64.zip',
+        ('linux', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.26/downloads/lilypond-2.25.26-linux-x86_64.tar.gz',
+        ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.26/downloads/lilypond-2.25.26-darwin-x86_64.tar.gz',
+        ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.26/downloads/lilypond-2.25.26-darwin-arm64.tar.gz'
+    },
+    (2, 25, 30): {
+        ('windows', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.30/downloads/lilypond-2.25.30-mingw-x86_64.zip',
+        ('linux', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.30/downloads/lilypond-2.25.30-linux-x86_64.tar.gz',
+        ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.30/downloads/lilypond-2.25.30-darwin-x86_64.tar.gz',
+        ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.30/downloads/lilypond-2.25.30-darwin-arm64.tar.gz'
     }
 }
 
@@ -64,8 +79,10 @@ class _ProgressBar():
 
     def __call__(self, block_num, block_size, total_size):
         if not self.pbar:
+            import progressbar
             self.pbar = progressbar.ProgressBar(maxval=total_size)
             self.pbar.start()
+        assert self.pbar is not None
 
         downloaded = block_num * block_size
         if downloaded < total_size:
@@ -74,34 +91,37 @@ class _ProgressBar():
             self.pbar.finish()
 
 
-def _download(url: str, destFolder: Path, showprogress=True, skip=True) -> Path:
+def _download(url: str, destFolder: pathlib.Path, showprogress=True, skip=True) -> pathlib.Path:
+    import pathlib
     assert destFolder.exists() and destFolder.is_dir()
     fileName = os.path.split(url)[1]
-    dest = Path(destFolder) / fileName
+    dest = pathlib.Path(destFolder) / fileName
+
     if dest.exists():
         if skip:
-            logger.info(f"Destination {dest} already exists, no need to download")
+            logger.info("Destination '%s' already exists, no need to download", dest)
             return dest
         else:
-            logger.info(f"Destination {dest} already exists, overwriting")
+            logger.info("Destination '%s' already exists, overwriting", dest)
             os.remove(dest)
+    import urllib.request
     if showprogress:
         print(f"Downloading {url}")
         urllib.request.urlretrieve(url, dest, _ProgressBar())
     else:
-        logger.info(f"Downloading {url}")
+        logger.info("Downloading '%s'", url)
         urllib.request.urlretrieve(url, dest)
-    logger.info(f"   ... saved to {dest}")
+    logger.info("   ... saved to '%s'", dest)
     return dest
 
 
-def _uncompress(path: Path, destfolder: Path):
-    def _zipextract(zippedfile: Path, destfolder: Path):
+def _uncompress(path: pathlib.Path, destfolder: pathlib.Path):
+    def _zipextract(zippedfile: pathlib.Path, destfolder: pathlib.Path):
         import zipfile
         with zipfile.ZipFile(zippedfile, 'r') as z:
             z.extractall(destfolder)
 
-    def _targzextract(f: Path, destfolder: Path):
+    def _targzextract(f: pathlib.Path, destfolder: pathlib.Path):
         import tarfile
         tfile = tarfile.open(f)
         tfile.extractall(destfolder)
@@ -116,14 +136,15 @@ def _uncompress(path: Path, destfolder: Path):
         raise RuntimeError(f"File format of {path} not supported")
 
 
-def _lilyponddist_folder() -> Path:
-    return Path(appdirs.user_data_dir('lilyponddist'))
+def _lilyponddist_folder() -> pathlib.Path:
+    import pathlib
+    return pathlib.Path(appdirs.user_data_dir('lilyponddist'))
 
 
 def install_lilypond(version: tuple[int, int, int] | str = LASTVERSION,
                      osname='',
                      arch=''
-                     ) -> Path:
+                     ) -> pathlib.Path:
     """
     Downloads and install lilypond, expands it and returns the root path
 
@@ -135,6 +156,7 @@ def install_lilypond(version: tuple[int, int, int] | str = LASTVERSION,
     Returns:
         the destination folder. This will be something like '~/.local/share/lilyponddist/lilypond-2.24.1'
     """
+    import pathlib
     _osname, _arch = get_platform()
     if not osname:
         osname = _osname
@@ -155,26 +177,20 @@ def install_lilypond(version: tuple[int, int, int] | str = LASTVERSION,
 
     url = urls.get((osname, arch))
     if url is None:
-        if osname == 'darwin' and arch == 'arm64':
-            print("At the moment there is no binary package for macos arm64 for version {version}. The recommended "
-                  "way to install lilypond in this case is via homebrew (https://brew.sh/). "
-                  "Once homebrew is installed, you can install lilypond by typing `brew install lilypond` "
-                  "at the terminal. See https://formulae.brew.sh/formula/lilypond#default. This will "
-                  "install a native (arm64) version for your OS.")
         platforms = [f"{osname}-{arch}" for osname, arch in urls.keys()]
         raise KeyError(f"Platform {osname}-{arch} not supported. Possible platforms: {platforms}")
 
-    tempdir = Path(tempfile.gettempdir())
+    tempdir = pathlib.Path(tempfile.gettempdir())
     payload = _download(url, tempdir, showprogress=True)
     if not payload.exists():
         raise OSError(f"Failed to download file {payload}, file does not exist")
 
     destfolder = _lilyponddist_folder()
 
-    logger.info(f"Creating folder '{destfolder}' if needed")
+    logger.info("Creating folder '%s' if needed", destfolder)
     destfolder.mkdir(parents=True, exist_ok=True)
 
-    logger.debug(f"Uncompressing '{payload}' to '{destfolder}'")
+    logger.debug("Uncompressing '%s' to '%s'", payload, destfolder)
     _uncompress(payload, destfolder)
 
     assert destfolder.exists()
@@ -212,7 +228,7 @@ def _fix_times(version: tuple[int, int, int]):
     if ccache.exists():
         for f in ccache.rglob("*.go"):
             f.touch(exist_ok=True)
-        logger.info(f"Fixed times of lilyponds binaries at {ccache}")
+        logger.info("Fixed times of lilyponds binaries at %s", ccache)
     else:
         logger.warning(f"Lilypond .go cached files not found: {ccache}/*.go")
 
@@ -267,7 +283,7 @@ def available_versions_for_platform(platform='') -> list[str]:
 
 
 @functools.cache
-def installed_versions() -> dict[tuple[int, int, int], Path]:
+def installed_versions() -> dict[tuple[int, int, int], pathlib.Path]:
     """
     Returns a dict mapping version to its root directory
 
@@ -309,16 +325,16 @@ def _initlib(autoupdate=False):
         return
 
     if not is_lilypond_installed():
-        logger.info(f"Lilypond not installed, downloading version {LASTVERSION}")
+        logger.info("Lilypond not installed, downloading version %s", LASTVERSION)
         install_lilypond(osname=osname)
     elif autoupdate and can_update():
-        logger.info(f"Lilypond is installed but needs to be updated, downloading and installing version {LASTVERSION}")
+        logger.info("Lilypond is installed but needs to be updated, downloading and installing version %s", LASTVERSION)
         install_lilypond(osname=osname)
     else:
         currentversion, versionline = lilypond_version()
-        logger.debug(f"Lilypond is installed (version: {currentversion}, version line: {versionline}). ")
+        logger.debug("Lilypond is installed (version: %s, version line: %s). ", currentversion, versionline)
         if currentversion < LASTVERSION:
-            logger.debug(f"Lilypond can be updated to version {LASTVERSION}")
+            logger.debug("Lilypond can be updated to version %s", LASTVERSION)
 
 
 def get_platform(normalize=True) -> tuple[str, str]:
@@ -404,7 +420,7 @@ def _parse_versionstr(versionstr: str) -> tuple[int, int, int]:
     return major, minor, patch
 
 
-def lilypondroot(version='') -> Path | None:
+def lilypondroot(version='') -> pathlib.Path | None:
     """
     The root folder of the lilypond installation
 
@@ -498,7 +514,7 @@ def _lilyexe() -> str:
         return 'lilypond'
 
 
-def _find_lilypond(version='') -> Path | None:
+def _find_lilypond(version='') -> pathlib.Path | None:
     installed = installed_versions()
     if not installed:
         logger.debug("No lilypond installation found")
@@ -510,7 +526,7 @@ def _find_lilypond(version='') -> Path | None:
         versiontup = max(installed.keys())
     root = installed.get(versiontup)
     if not root:
-        logger.debug("No lilypond installation found for version {versiontup}")
+        logger.debug("No lilypond installation found for version %s", versiontup)
         return None
     assert root.exists()
     lilypath = root / 'bin' / _lilyexe()
@@ -527,7 +543,7 @@ def _reset_cache():
     installed_versions.cache_clear()
 
 
-def lilypondbin(version='') -> Path:
+def lilypondbin(version='') -> pathlib.Path:
     """
     Get the lilypond binary for this platform.
 
@@ -556,17 +572,3 @@ def lilypondbin(version='') -> Path:
         logger.debug(f"There is an update available, {LASTVERSION}. To update, call the `update()` function")
 
     return lily
-
-
-# For backwards compatibility
-_get_platform = get_platform
-
-
-# if _is_first_run():
-#     print()
-#     print("*****************************************************")
-#     print("*              lilyponddist -- First Run            *")
-#     print("*****************************************************")
-#     print()
-#     logger.setLevel("DEBUG")
-#     _initlib()
