@@ -147,7 +147,32 @@ def _lilyponddist_folder() -> pathlib.Path:
     return pathlib.Path(appdirs.user_data_dir('lilyponddist'))
 
 
-def install_lilypond(version: tuple[int, int, int] | str = LASTVERSION,
+def _version_higher_or_equal_to(minversion: tuple[int, int, int], osname: str, arch: str) -> tuple[int, int, int] | None:
+    versions = list(_urls.keys())
+    versions.sort()
+    possible_versions = [v for v in versions if v >= minversion]
+    for version in reversed(possible_versions):
+        urls = _urls[version]
+        url = urls.get((osname, arch))
+        if url:
+            return version
+    return None
+
+
+def _version_higher_than(minversion: tuple[int, int, int], osname: str, arch: str) -> tuple[int, int, int] | None:
+    versions = list(_urls.keys())
+    versions.sort()
+    possible_versions = [v for v in versions if v > minversion]
+    for version in reversed(possible_versions):
+        urls = _urls[version]
+        url = urls.get((osname, arch))
+        if url:
+            return version
+    return None
+
+
+def install_lilypond(version: tuple[int, int, int] | str = '',
+                     match="=",
                      osname='',
                      arch=''
                      ) -> pathlib.Path:
@@ -156,6 +181,8 @@ def install_lilypond(version: tuple[int, int, int] | str = LASTVERSION,
 
     Args:
         version: the version to download/install
+        match: one of "=", ">=", ">". The matching operator can also be
+            given as a part of version if this is a string (eg ">=2.24.0")
         osname: one of 'linux', 'windows', 'darwin'
         arch: one of 'x86_64', 'arm64'.
 
@@ -170,21 +197,46 @@ def install_lilypond(version: tuple[int, int, int] | str = LASTVERSION,
         arch = _arch
 
     if not version:
-        versiontup = LASTVERSION
+        versiontup = _version_higher_or_equal_to((2, 25, 24), osname, arch)
+        if not versiontup:
+            raise ValueError(f"Could not find any version for {osname}/{arch}")
+
     elif isinstance(version, str):
+        if version.startswith(">="):
+            version = version[2:]
+            match = ">="
+        elif version.startswith(">"):
+            version = version[1:]
+            match = ">"
+        elif version.startswith("="):
+            version = version[1:]
+            match = "="
         versiontup = _parse_versionstr(version)
     else:
         versiontup = version
 
     assert isinstance(versiontup, tuple) and len(versiontup) == 3 and all(isinstance(part, int) for part in versiontup)
-    urls = _urls.get(versiontup)
-    if not urls:
-        raise ValueError(f"Version {versiontup} unknown. Possible versions: {_urls.keys()}")
+    if match == "=":
+        urls = _urls.get(versiontup)
+        if not urls:
+            raise ValueError(f"Version {versiontup} unknown. Possible versions: {_urls.keys()}")
+        url = urls.get((osname, arch))
+        if url is None:
+            raise KeyError(f"Platform {osname}-{arch} not supported for version {versiontup}")
 
-    url = urls.get((osname, arch))
-    if url is None:
-        platforms = [f"{osname}-{arch}" for osname, arch in urls.keys()]
-        raise KeyError(f"Platform {osname}-{arch} not supported. Possible platforms: {platforms}")
+    elif match == ">=":
+        # The latest version higher or equal to the given version
+        matchedversion = _version_higher_or_equal_to(versiontup, osname=osname, arch=arch)
+        if not matchedversion:
+            raise ValueError(f"Could not find any url for {osname}/{arch} with version >= {versiontup}.")
+        url = _urls[matchedversion][(osname, arch)]
+    elif match == ">":
+        matchedversion = _version_higher_than(versiontup, osname=osname, arch=arch)
+        if not matchedversion:
+            raise ValueError(f"Could not find any url for {osname}/{arch} with version > {versiontup}.")
+        url = _urls[matchedversion][(osname, arch)]
+    else:
+        raise ValueError(f"Expected '=' or '>=', got {match}")
 
     tempdir = pathlib.Path(tempfile.gettempdir())
     payload = _download(url, tempdir, showprogress=True)
@@ -467,6 +519,9 @@ def lilypond_version() -> tuple[tuple[int, int, int], str]:
     where version is a tuple (major: int, minor: int, patch: int) and
     versionline is the line where the version is defined (normally the
     first line printed by lilypond when called as 'lilypond --version')
+
+    Raises RuntimeError if LilyPond is not installed via lilyponddist or
+    if an error occurs while running 'lilypond --version'
     """
     lilybin = _find_lilypond()
     if not lilybin or not lilybin.exists():
@@ -527,10 +582,25 @@ def _find_lilypond(version='') -> pathlib.Path | None:
         return None
 
     if version:
+        if version.startswith(">="):
+            version = version[2:]
+            matchop = ">="
+        else:
+            matchop = "="
         versiontup = _parse_versionstr(version)
     else:
         versiontup = max(installed.keys())
-    root = installed.get(versiontup)
+        matchop = "="
+    if matchop == "=":
+        root = installed.get(versiontup)
+    else:
+        maxversion = max(installed)
+        if maxversion >= versiontup:
+            root = installed[maxversion]
+        else:
+            logger.error(f"No lilypond installation found for version >= {version}. "
+                         f"Installed versions are: {installed.keys()}")
+            return None
     if not root:
         logger.debug("No lilypond installation found for version %s", versiontup)
         return None
@@ -556,7 +626,8 @@ def lilypondbin(version='') -> pathlib.Path:
     Args:
         version: the version to use, or an empty string to
             use the latest version installed, or the latest
-            version available
+            version available. Can also be a min. version,
+            as ">=2.25.10"
 
     Returns:
         the path of the lilypond binary as a Path object
