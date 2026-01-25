@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lilyponddist"
-version = "1.2.0"
+version = "1.2.1"
 description = "lilypond distribution as a python package"
 authors = [
   { name = "Eduardo Moguillansky", email = "eduardo.moguillansky@gmail.com" },
