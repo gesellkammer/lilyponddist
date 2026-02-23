@@ -528,21 +528,8 @@ def lilypondroot(version='') -> pathlib.Path | None:
 
 
 @functools.cache
-def lilypond_version() -> tuple[tuple[int, int, int], str]:
-    """
-    Returns a tuple (version, versionline)
-
-    where version is a tuple (major: int, minor: int, patch: int) and
-    versionline is the line where the version is defined (normally the
-    first line printed by lilypond when called as 'lilypond --version')
-
-    Raises RuntimeError if LilyPond is not installed via lilyponddist or
-    if an error occurs while running 'lilypond --version'
-    """
-    lilybin = _find_lilypond()
-    if not lilybin or not lilybin.exists():
-        raise RuntimeError("Lilypond has not been installed via lilyponddist")
-
+def _lilypond_version(lilybin: pathlib.Path) -> tuple[tuple[int, int, int], str]:
+    assert lilybin and lilybin.exists()
     proc = subprocess.run([lilybin, '--version'], capture_output=True)
     if proc.returncode != 0:
         logger.error(proc.stderr)
@@ -554,6 +541,30 @@ def lilypond_version() -> tuple[tuple[int, int, int], str]:
             patch = int(match.group(3))
             return ((major, minor, patch), line)
     return ((0, 0, 0), '')
+
+
+def lilypond_version(lilybin: str | pathlib.Path | None = None) -> tuple[tuple[int, int, int], str]:
+    """
+    Returns a tuple (version, versionline)
+
+    where version is a tuple (major: int, minor: int, patch: int) and
+    versionline is the line where the version is defined (normally the
+    first line printed by lilypond when called as 'lilypond --version')
+
+    Raises RuntimeError if LilyPond is not installed via lilyponddist or
+    if an error occurs while running 'lilypond --version'
+    """
+    if lilybin is None:
+        lilybin = _find_lilypond()
+        if not lilybin:
+            raise RuntimeError("LilyPond has not been installed via lilyponddist")
+    else:
+        lilybin = lilybin if isinstance(lilybin, pathlib.Path) else pathlib.Path(lilybin)
+
+    if not lilybin.exists():
+        raise RuntimeError(f"lilypond binary {lilybin} does not exist")
+
+    return _lilypond_version(lilybin)
 
 
 def can_update() -> tuple[int, int, int] | None:
