@@ -149,6 +149,15 @@ def _lilyponddist_folder() -> pathlib.Path:
 
 def _select_version(minversion: tuple[int, int, int], versions: list[tuple[int, int, int]], matchop=">="
                     ) -> tuple[int, int, int] | None:
+    """
+    Args:
+        minversion: the min. version to select from as a truple (major, minor, patch)
+        versions: available versions, as a triple (major, minor, patch)
+        matchop: one of >= or >, as a string
+
+    Returns:
+        a version triple or None
+    """
     if matchop == ">=":
         possible_versions = [v for v in versions if v >= minversion]
     elif matchop == ">":
@@ -162,6 +171,19 @@ def _select_version(minversion: tuple[int, int, int], versions: list[tuple[int, 
 
 def _latest_version_for_platform(minversion: tuple[int, int, int]=(24, 0, 0), matchop=">=", platform: tuple[str, str] | None = None
                                  ) -> tuple[int, int, int] | None:
+    """
+    Returns the latest version matching the given conditions
+
+    If a version is returned, the associated url can be accessed directly via _urls[versiontriplet][(os, arch)]
+
+    Args:
+        minversion: min version allowed, as a verison triplet
+        matchop: one of >=, > or =
+        platform: the platform as a tuple (os, arch), or None to use the current platform
+
+    Returns:
+        the latest version as a triplet, or None if no matches found
+    """
     if platform:
         osname, arch = platform
     else:
@@ -169,10 +191,29 @@ def _latest_version_for_platform(minversion: tuple[int, int, int]=(24, 0, 0), ma
     versions = [v for v, urls in _urls.items() if (osname, arch) in urls]
     if not versions:
         return None
+
     return _select_version(minversion=minversion, versions=versions, matchop=matchop)
 
 
-def _parse_version(version: str) -> tuple[tuple[int, int, int], str]:
+def _parse_version_tuple(versionstr: str) -> tuple[int, int, int]:
+    """
+    Parses a version str of the form <major>.<minor>.<patch>, where minor and patch are optional
+    """
+    parts = versionstr.split(".")
+    major = int(parts[0])
+    minor = 0
+    patch = 0
+    if len(parts) >= 2:
+        minor = int(parts[1])
+    if len(parts) >= 3:
+        patch = int(parts[2])
+    if len(parts) >= 4:
+        logger.warning(f"Unexpected version string '{versionstr}', parsed as {major}.{minor}.{patch}")
+    return major, minor, patch
+
+
+@functools.cache
+def _split_version(version: str) -> tuple[tuple[int, int, int], str]:
     """
     Parses a version str of the form "2.24.0", ">=2.25.12", ">2.24", etc.
 
@@ -196,8 +237,8 @@ def _parse_version(version: str) -> tuple[tuple[int, int, int], str]:
 def install_lilypond(version: tuple[int, int, int] | str = '',
                      matchop="=",
                      osname='',
-                     arch=''
-                     ) -> None:
+                     arch='',
+                     ) -> tuple[int, int, int]:
     """
     Downloads and install lilypond, expands it and returns the root path
 
@@ -207,6 +248,9 @@ def install_lilypond(version: tuple[int, int, int] | str = '',
             given as a part of version if this is a string (eg ">=2.24.0")
         osname: one of 'linux', 'windows', 'darwin'
         arch: one of 'x86_64', 'arm64'.
+
+    Returns:
+        the version installed, as a triplet
 
     """
     import pathlib
@@ -220,9 +264,8 @@ def install_lilypond(version: tuple[int, int, int] | str = '',
         versiontup = _latest_version_for_platform(minversion=(2, 25, 24), matchop=">=", platform=(osname, arch))
         if not versiontup:
             raise ValueError(f"Could not find any version for {osname}/{arch}")
-
     elif isinstance(version, str):
-        versiontup, matchop = _parse_version(version)
+        versiontup, matchop = _split_version(version)
     else:
         versiontup = version
 
@@ -234,11 +277,15 @@ def install_lilypond(version: tuple[int, int, int] | str = '',
         url = urls.get((osname, arch))
         if url is None:
             raise KeyError(f"Platform {osname}-{arch} not supported for version {versiontup}")
+        matchedversion = versiontup
+
     else:
         assert matchop in (">=", ">")
         matchedversion = _latest_version_for_platform(minversion=versiontup, matchop=matchop, platform=(osname, arch))
         if not matchedversion:
             raise ValueError(f"Could not find any url for {osname}/{arch} with version {matchop} {versiontup}.")
+        url = _urls[matchedversion][(osname, arch)]
+
 
     tempdir = pathlib.Path(tempfile.gettempdir())
     payload = _download(url, tempdir, showprogress=True)
@@ -255,7 +302,8 @@ def install_lilypond(version: tuple[int, int, int] | str = '',
 
     assert destfolder.exists()
     _reset_cache()
-    _fix_times(versiontup)
+    _fix_times(matchedversion)
+    return matchedversion
 
 
 def _is_first_run() -> bool:
@@ -473,24 +521,6 @@ def get_platform_id() -> str:
     return f"{osname}-{arch}"
 
 
-@functools.cache
-def _parse_version_tuple(versionstr: str) -> tuple[int, int, int]:
-    """
-    Parses a version str of the form <major>.<minor>.<patch>, where minor and patch are optional
-    """
-    parts = versionstr.split(".")
-    major = int(parts[0])
-    minor = 0
-    patch = 0
-    if len(parts) >= 2:
-        minor = int(parts[1])
-    if len(parts) >= 3:
-        patch = int(parts[2])
-    if len(parts) >= 4:
-        logger.warning(f"Unexpected version string '{versionstr}', parsed as {major}.{minor}.{patch}")
-    return major, minor, patch
-
-
 def lilypondroot(version='') -> pathlib.Path | None:
     """
     The root folder of the lilypond installation
@@ -515,7 +545,7 @@ def lilypondroot(version='') -> pathlib.Path | None:
         versiontup = max(_installed_versions.keys())
         return _installed_versions[versiontup]
 
-    versiontup, matchop = _parse_version(version)
+    versiontup, matchop = _split_version(version)
     if matchop == "=":
         if path := _installed_versions.get(versiontup):
             return path
@@ -620,7 +650,7 @@ def _find_lilypond(version='') -> pathlib.Path | None:
         versiontup = max(installed.keys())
         root = installed[versiontup]
     else:
-        versiontup, matchop = _parse_version(version)
+        versiontup, matchop = _split_version(version)
         if matchop == "=":
             root = installed.get(versiontup)
             if not root:
