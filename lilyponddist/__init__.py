@@ -59,6 +59,12 @@ _urls = {
         ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.31/downloads/lilypond-2.25.31-darwin-x86_64.tar.gz',
         ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.31/downloads/lilypond-2.25.31-darwin-arm64.tar.gz'
     },
+    (2, 25, 81): {
+        ('windows', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.81/downloads/lilypond-2.25.81-mingw-x86_64.zip',
+        ('linux', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.81/downloads/lilypond-2.25.81-linux-x86_64.tar.gz',
+        ('darwin', 'x86_64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.81/downloads/lilypond-2.25.81-darwin-x86_64.tar.gz',
+        ('darwin', 'arm64'): 'https://gitlab.com/lilypond/lilypond/-/releases/v2.25.81/downloads/lilypond-2.25.81-darwin-arm64.tar.gz'
+    },
 }
 
 
